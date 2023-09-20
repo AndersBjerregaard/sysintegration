@@ -3,6 +3,8 @@
 use amiquip::{Connection, Exchange, Publish, Result};
 use rocket::form::Form;
 use rocket::response::content;
+use rocket::serde::Deserialize;
+use rocket::serde::json::Json;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -10,22 +12,35 @@ fn index() -> &'static str {
 }
 
 #[get("/tour")]
-fn tour() -> content::RawJson<String> {
-    content::RawJson(String::from("Tours Endpoint!"))
+fn tour() -> Json<String> {
+    Json(String::from("Tours Endpoint!"))
 }
 
-#[derive(FromForm)]
-struct Task<'r> {
-    complete: bool,
-    r#type: &'r str,
+// Struct for form data
+// #[derive(FromForm)]
+// struct Booking {
+//     book: bool,
+//     cancel: bool,
+//     name: String,
+//     email: String,
+//     location: String,
+// }
+
+#[derive(Deserialize)]
+struct Booking {
+    book: bool,
+    cancel: bool,
+    name: String,
+    email: String,
+    location: String,
 }
 
-#[post("/book", data = "<task>")]
-async fn book(task: Form<Task<'_>>) -> content::RawJson<String> {
-    // todo something with task
+#[post("/book", data = "<booking>")]
+async fn book(booking: Json<Booking>) -> Json<String> {
+    // todo something with booking
     match send_booking().await {
-        Ok(_) => content::RawJson("Booking successful!".to_string()),
-        Err(_) => content::RawJson("Booking failed!".to_string()),
+        Ok(_) => Json(String::from("Booking successful!")),
+        Err(_) => Json(String::from("Booking failed!")),
     }
 }
 
@@ -45,11 +60,18 @@ async fn send_booking() -> std::result::Result<(), amiquip::Error> {
     connection.close()
 }
 
+// #[launch]
+// fn rocket() -> _ {
+//     rocket::build()
+//         .mount("/", routes![index,tour,book])
+// }
+
 #[rocket::main]
-async fn main() {
-    rocket::build()
-        .mount("/", routes![book,tour,index])
+async fn main() -> Result<(), rocket::Error> {
+    let _rocket = rocket::build()
+        .mount("/", routes![index,tour,book])
         .launch()
-        .await
-        .expect("Rocket did not launch successfully");
+        .await?;
+
+    Ok(())
 }
