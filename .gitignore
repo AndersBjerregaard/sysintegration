@@ -427,3 +427,4 @@ coverage
 *.sw?
 Tours/frontend-app/.vscode/extensions.json
 Tours/tours-web-app/target/
+Tours/email.service/target/
