@@ -1,10 +1,16 @@
 #[macro_use] extern crate rocket;
 
+use std::collections::{hash_set, HashSet};
+
 use amiquip::{Connection, Exchange, Publish, Result};
-use rocket::form::Form;
-use rocket::response::content;
+use rocket::fairing::{Fairing, Kind, Info};
+use rocket::http::{Header, Status};
+use rocket::{Request, Response};
+use rocket::{form::Form, fairing::AdHoc};
+use rocket::response::{content, status};
 use rocket::serde::Deserialize;
 use rocket::serde::json::Json;
+use rocket_cors::{AllowedHeaders,AllowedOrigins, CorsOptions};
 
 #[get("/")]
 fn index() -> &'static str {
@@ -15,16 +21,6 @@ fn index() -> &'static str {
 fn tour() -> Json<String> {
     Json(String::from("Tours Endpoint!"))
 }
-
-// Struct for form data
-// #[derive(FromForm)]
-// struct Booking {
-//     book: bool,
-//     cancel: bool,
-//     name: String,
-//     email: String,
-//     location: String,
-// }
 
 #[derive(Deserialize)]
 struct Booking {
@@ -60,16 +56,35 @@ async fn send_booking() -> std::result::Result<(), amiquip::Error> {
     connection.close()
 }
 
-// #[launch]
-// fn rocket() -> _ {
-//     rocket::build()
-//         .mount("/", routes![index,tour,book])
-// }
+#[options("/book")]
+fn book_options<'r>() -> Status {
+    Status::Ok
+}
+
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+    fn info(&self) -> Info {
+        Info {
+            name: "Access-Control-Allow-Origin",
+            kind: Kind::Response
+        }
+    }
+
+    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+        response.set_header(Header::new("Access-Control-Allow-Origin", "http://localhost:5173"));
+        response.set_header(Header::new("Access-Control-Allow-Methods", "POST, GET, PUT, DELETE, OPTIONS"));
+        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+    }
+}
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
     let _rocket = rocket::build()
-        .mount("/", routes![index,tour,book])
+        .attach(CORS)
+        .mount("/", routes![index,tour,book,book_options])
         .launch()
         .await?;
 

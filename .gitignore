@@ -426,3 +426,4 @@ coverage
 *.sln
 *.sw?
 Tours/frontend-app/.vscode/extensions.json
+Tours/tours-web-app/target/
