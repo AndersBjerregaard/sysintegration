@@ -42,7 +42,7 @@ async fn book(booking: Json<Booking>) -> Json<String> {
 
 async fn send_booking() -> std::result::Result<(), amiquip::Error> {
     // Open connection
-    let mut connection = Connection::insecure_open("amqp://guest:guest@localhost:5672")?;
+    let mut connection = Connection::insecure_open("amqp://guest:guest@localhost:5673")?;
 
     // Open a channel - None says let the library choose the channel ID.
     let channel = connection.open_channel(None)?;
