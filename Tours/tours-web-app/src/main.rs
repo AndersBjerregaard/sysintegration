@@ -2,13 +2,13 @@
 
 use std::collections::{hash_set, HashSet};
 
-use amiquip::{Connection, Exchange, Publish, Result};
+use amiquip::{Connection, Exchange, Publish, Result, ExchangeDeclareOptions};
 use rocket::fairing::{Fairing, Kind, Info};
 use rocket::http::{Header, Status};
 use rocket::{Request, Response};
 use rocket::{form::Form, fairing::AdHoc};
 use rocket::response::{content, status};
-use rocket::serde::Deserialize;
+use rocket::serde::{Deserialize, Serialize};
 use rocket::serde::json::Json;
 use rocket_cors::{AllowedHeaders,AllowedOrigins, CorsOptions};
 
@@ -22,7 +22,7 @@ fn tour() -> Json<String> {
     Json(String::from("Tours Endpoint!"))
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Booking {
     book: bool,
     cancel: bool,
@@ -34,26 +34,46 @@ struct Booking {
 #[post("/book", data = "<booking>")]
 async fn book(booking: Json<Booking>) -> Json<String> {
     // todo something with booking
-    match send_booking().await {
+    match send_booking(&booking).await {
         Ok(_) => Json(String::from("Booking successful!")),
         Err(_) => Json(String::from("Booking failed!")),
     }
 }
 
-async fn send_booking() -> std::result::Result<(), amiquip::Error> {
+async fn send_booking(booking: &Booking) -> std::result::Result<(), amiquip::Error> {
     // Open connection
     let mut connection = Connection::insecure_open("amqp://guest:guest@localhost:5673")?;
 
     // Open a channel - None says let the library choose the channel ID.
     let channel = connection.open_channel(None)?;
 
-    // Get a handle to the direct exchange on our channel.
-    let exchange = Exchange::direct(&channel);
+    // Declare the exchange to publish to.
+    let exchange = channel.exchange_declare(
+        amiquip::ExchangeType::Topic,
+        "bookings",
+        ExchangeDeclareOptions::default(),
+    )?;
 
-    // Publish a message to the "hello" queue.
-    exchange.publish(Publish::new("hello there".as_bytes(), "hello"))?;
+    let routing_key = get_routing_key(booking);
+
+    // Serialize Booking struct to JSON.
+    let json_payload = match serde_json::to_string(booking) {
+        Ok(payload) => payload,
+        Err(err) => return Err(amiquip::Error::ServerClosedConnection { code: 0, message: String::from(format!("Error serializing booking: {}", err)) }),
+    };
+
+    let payload_bytes = json_payload.as_bytes();
+
+    exchange.publish(Publish::new(payload_bytes, routing_key))?;
 
     connection.close()
+}
+
+fn get_routing_key(booking: &Booking) -> String {
+    if (booking.book) {
+        return String::from("tour.book");
+    }
+    return String::from("tour.cancel");
 }
 
 #[options("/book")]
