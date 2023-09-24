@@ -1,4 +1,30 @@
 use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions, Result, ExchangeDeclareOptions};
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+struct Booking {
+    book: bool,
+    cancel: bool,
+    name: String,
+    email: String,
+    location: String,
+}
+
+impl Booking {
+    fn new(book: bool, 
+        cancel: bool, 
+        name: String, 
+        email: String, 
+        location: String) -> Booking {
+            Booking {
+                book: book,
+                cancel: cancel,
+                name: name,
+                email: email,
+                location: location,
+            }
+    }
+}
 
 fn main() -> Result<()> {
     // Open connection.
@@ -19,6 +45,7 @@ fn main() -> Result<()> {
         "",
         QueueDeclareOptions {
             exclusive: true,
+            durable: true,
             ..QueueDeclareOptions::default()
         },
     )?;
@@ -35,10 +62,9 @@ fn main() -> Result<()> {
         )?;
     }
 
-    // Start a consumer. Use no_ack: true so the server doesn't wait
-    // for this app to ack the message it sends.
+    // Disable no_ack to allow manual acknowledgement
     let consumer = queue.consume(ConsumerOptions { 
-        no_ack: true,
+        no_ack: false,
         ..ConsumerOptions::default()
     })?;
 
@@ -48,7 +74,19 @@ fn main() -> Result<()> {
         match message {
             ConsumerMessage::Delivery(delivery) => {
                 let body = String::from_utf8_lossy(&delivery.body);
-                println!("({:>3}) {}:{}", i, delivery.routing_key, body);
+
+                println!("Message received with routing key and data: {}:{}", delivery.routing_key, body);
+                
+                match process(body) {
+                    Ok(_) => { 
+                        println!("Successfully deserialized message body data. Acknowledging..."); 
+                        delivery.ack(&channel)?
+                    },
+                    Err(_) => {
+                        println!("Unable to deserialize message  body data. Rejecting without requeuing...");
+                        delivery.nack(&channel, false)?
+                    },
+                };
             }
             other => {
                 println!("Consumer ended: {:?}", other);
@@ -58,4 +96,11 @@ fn main() -> Result<()> {
     }
 
     connection.close()
+}
+
+fn process(unprocessed_string: std::borrow::Cow<'_, str>) -> std::result::Result<Booking, serde_json::Error> {
+    // Dereference string from body
+    let body = unprocessed_string.into_owned();
+
+    serde_json::from_str(&body)
 }
