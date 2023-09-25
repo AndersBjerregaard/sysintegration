@@ -1,7 +1,18 @@
 <template>
-    <h3>
-        Tour Selection
-    </h3>
+    <div class="tourHeader">
+        <h3>
+            Tour Selection
+        </h3>
+        <br/>
+        <img src="../assets/paper-plane.svg" width="128" height="128">
+        <div class="tourVersion">
+            <label>Tour Booking Version</label>
+            <select v-model="selectedVersion" class="versionSelect">
+                <option value="version1">Version 1</option>
+                <option value="version2">Version 2</option>
+            </select>
+        </div>
+    </div>
     <form @submit.prevent="handleSubmit">
         <label>Name:</label>
         <input type="text" required v-model="name">
@@ -20,13 +31,22 @@
         </div>
 
         <label>Tours: </label>
-        <select v-model="tour">
+        <select v-model="tour" class="tourSelect">
             <option value="copenhagen">Copenhagen</option>
             <option value="wien">Wien</option>
             <option value="krakow">Krakow</option>
             <option value="berlin">Berlin</option>
             <option value="london">London</option>
         </select>
+
+        <div v-if="selectedVersion === 'version2'">
+            <label>Class:</label>
+            <select v-model="selectedClass" class="classSelect">
+                <option value="economic">Economic</option>
+                <option value="business">Business</option>
+                <option value="first">First</option>
+            </select>
+        </div>
 
         <div class="submit">
             <button>Submit</button>
@@ -45,7 +65,9 @@
                 book: false,
                 cancel: false,
                 tour: '',
-                emailError: ''
+                emailError: '',
+                selectedVersion: 'version1',
+                selectedClass: ''
             }
         },
         methods: {
@@ -60,35 +82,69 @@
                 this.emailError = this.email.length > 5 ? 
                     '' : 'There`s no way your email is that short';
                 if (!this.emailError) {
-                    const url = 'http://localhost:8000/book';
-                    const data = {
-                      book: this.book,
-                      cancel: this.cancel,
-                      name: this.name,
-                      email: this.email,
-                      location: this.tour
-                    };
-
-                    fetch(url, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify(data)
-                    })
-                      .then(response => {
-                        if (!response.ok) {
-                          throw new Error('Network response was not ok');
-                        }
-                        return response.json();
-                      })
-                      .then(data => {
-                        console.log(data);
-                      })
-                      .catch(error => {
-                        console.error('There was a problem with the fetch operation:', error);
-                      });
-
+                    if (this.selectedVersion === 'version1') {
+                        const url = 'http://localhost:8000/book';
+                        const data = {
+                          book: this.book,
+                          cancel: this.cancel,
+                          name: this.name,
+                          email: this.email,
+                          location: this.tour
+                        };
+    
+                        fetch(url, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify(data)
+                        })
+                          .then(response => {
+                            if (!response.ok) {
+                              throw new Error('Network response was not ok');
+                            }
+                            return response.json();
+                          })
+                          .then(data => {
+                            console.log(data);
+                          })
+                          .catch(error => {
+                            console.error('There was a problem with the fetch operation:', error);
+                          });
+                    } else {
+                        const url = 'http://localhost:8000/bookv2';
+                        const data = {
+                            booking: {
+                                book: this.book,
+                                cancel: this.cancel,
+                                name: this.name,
+                                email: this.email,
+                                location: this.tour
+                            },
+                            class: this.selectedClass
+                        };
+    
+                        fetch(url, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify(data)
+                        })
+                          .then(response => {
+                            if (!response.ok) {
+                              throw new Error('Network response was not ok');
+                            }
+                            return response.json();
+                          })
+                          .then(data => {
+                            console.log(data);
+                          })
+                          .catch(error => {
+                            console.error('There was a problem with the fetch operation:', error);
+                          });
+                    }
+                    alert('Form submitted!');
                 }
             }
         }
@@ -116,7 +172,6 @@
     input, select {
         display: block;
         padding: 10px 6px;
-        width: 100%;
         box-sizing: border-box;
         border: none;
         border-bottom: 1px solid #ddd;
@@ -155,5 +210,14 @@
         margin-top: 10px;
         font-size: 0.8em;
         font-weight: bold;
+    }
+    .tourHeader {
+        display: inline-block;
+    }
+    .tourSelect, .classSelect {
+        width: 250px;
+    }
+    .versionSelect {
+        width: 150px;
     }
 </style>
