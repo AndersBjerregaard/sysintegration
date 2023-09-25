@@ -6,7 +6,7 @@ First off you need a RabbitMQ message broker instance running.
 The port exposure for the host system is offset from the default ports being used by message broker protocols, in case the host system already are using these.
 
 ```
-docker run -d --hostname my-rabbit --name ecomm-rabbit -p 15672:15672 -p 5672:5672 rabbitmq:3-management
+docker run -d --hostname my-rabbit --name ecomm-rabbit -p 15673:15672 -p 5673:5672 rabbitmq:3-management
 ```
 
 Start Vue frontend application
@@ -23,6 +23,14 @@ Open another shell session in the `Tours` directory
 
 ```
 cd email-service/
+cargo build
+cargo run
+```
+
+Open another shell session in the `Tours` directory to run the admin application.
+The admin application listens for messages on the dead-letter-queue (which hold messages that were rejected by the back-office app)
+```
+cd admin-app/
 cargo build
 cargo run
 ```
