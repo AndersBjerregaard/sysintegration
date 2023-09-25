@@ -86,10 +86,10 @@ async fn send_booking(routing_key: String, bytes_payload: &[u8]) -> std::result:
         ExchangeDeclareOptions::default(),
     )?;
 
-    // Create durable message. Delivery mode can be set to `1` for transient and `2` for persistent.
+    // Create persistent message. Delivery mode can be set to `1` for transient and `2` for persistent.
     let message = Publish::with_properties(bytes_payload, routing_key, AmqpProperties::default().with_delivery_mode(2));
 
-    // Publish durable message
+    // Publish persistent message
     exchange.publish(message)?;
 
     // Wait for confirm from the RabbitMQ server.
