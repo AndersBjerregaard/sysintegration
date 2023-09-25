@@ -1,4 +1,4 @@
-use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions, Result, ExchangeDeclareOptions};
+use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions, Result, ExchangeDeclareOptions, Exchange};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
@@ -68,10 +68,13 @@ fn main() -> Result<()> {
     )?;
 
     // Declare the exchange.
-    let exchange = channel.exchange_declare(
-        amiquip::ExchangeType::Topic, 
-        "bookings", 
-        ExchangeDeclareOptions::default()
+    let exchange: Exchange<'_> = channel.exchange_declare(
+        amiquip::ExchangeType::Topic,
+        "bookings",
+        ExchangeDeclareOptions { 
+            durable: true, 
+            ..ExchangeDeclareOptions::default() 
+        },
     )?;
 
 

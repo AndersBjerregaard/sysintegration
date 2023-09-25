@@ -83,7 +83,10 @@ async fn send_booking(routing_key: String, bytes_payload: &[u8]) -> std::result:
     let exchange: Exchange<'_> = channel.exchange_declare(
         amiquip::ExchangeType::Topic,
         "bookings",
-        ExchangeDeclareOptions::default(),
+        ExchangeDeclareOptions { 
+            durable: true, 
+            ..ExchangeDeclareOptions::default() 
+        },
     )?;
 
     // Create persistent message. Delivery mode can be set to `1` for transient and `2` for persistent.
