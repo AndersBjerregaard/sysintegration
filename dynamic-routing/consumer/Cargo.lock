@@ -379,6 +379,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "dynamic-routing-consumer"
+version = "0.1.0"
+dependencies = [
+ "lapin",
+ "rand",
+ "tokio",
+ "tokio-executor-trait",
+ "tokio-reactor-trait",
+ "uuid",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -839,18 +851,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d433d9f1a3e8c1263d9456598b16fec66f4acc9a74dacffd35c7bb09b3a1328"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "producer"
-version = "0.1.0"
-dependencies = [
- "lapin",
- "rand",
- "tokio",
- "tokio-executor-trait",
- "tokio-reactor-trait",
- "uuid",
 ]
 
 [[package]]

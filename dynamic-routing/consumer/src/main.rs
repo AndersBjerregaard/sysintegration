@@ -3,7 +3,7 @@ use lapin::{Connection, ConnectionProperties, Consumer, Channel, options::{Basic
 use tokio::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
 
-const EXCHANGE_NAME: &str = "DR_Exchange";
+const DR_EXCHANGE_NAME: &str = "DR_Exchange";
 
 #[tokio::main]
 async fn main() {
@@ -42,23 +42,7 @@ async fn main() {
 
             println!("--> Process complete! Publishing message to load balancer...");
 
-            // Acquire lock before using the channel
-            let channel = channel.lock().await;
-
-            let confirm = channel.basic_publish(
-                EXCHANGE_NAME,
-                "",
-                BasicPublishOptions::default(),
-                b"Ready!",
-                BasicProperties::default(),
-            )
-            .await;
-
-            if confirm.is_err() {
-                println!("--> Could not publish message to load balancer: {}", confirm.unwrap_err());
-            } else {
-                println!("--> Published message to load balancer!");
-            }
+            publish_dr_message(&channel.lock().await).await;
 
             println!("--> Acknowledging...");
 
@@ -74,9 +58,26 @@ async fn main() {
     std::future::pending::<()>().await;
 }
 
+async fn publish_dr_message(channel: &MutexGuard<'_, Channel>) {
+    let confirm = channel.basic_publish(
+        DR_EXCHANGE_NAME,
+        "",
+        BasicPublishOptions::default(),
+        b"Ready!",
+        BasicProperties::default(),
+    )
+    .await;
+
+    if confirm.is_err() {
+        println!("--> Could not publish message to load balancer: {}", confirm.unwrap_err());
+    } else {
+        println!("--> Published message to load balancer!");
+    }
+}
+
 async fn declare_dr_exchange(channel: &MutexGuard<'_, Channel>) {
     let mut exchange = channel.exchange_declare(
-        EXCHANGE_NAME, 
+        DR_EXCHANGE_NAME, 
         lapin::ExchangeKind::Direct, 
         ExchangeDeclareOptions::default(), 
         FieldTable::default()).await;
@@ -86,7 +87,7 @@ async fn declare_dr_exchange(channel: &MutexGuard<'_, Channel>) {
         println!("--> Attempting to re-declare exchange in 3 seconds...");
         std::thread::sleep(Duration::from_millis(3000));
         exchange = channel.exchange_declare(
-            EXCHANGE_NAME, 
+            DR_EXCHANGE_NAME, 
             lapin::ExchangeKind::Direct, 
             ExchangeDeclareOptions::default(), 
             FieldTable::default()).await;
@@ -96,8 +97,8 @@ async fn declare_dr_exchange(channel: &MutexGuard<'_, Channel>) {
 }
 
 async fn consume_messages(channel: &MutexGuard<'_, Channel>) -> Consumer {
-    let consumer_tag = Uuid::new_v4().to_string();
-    let queue_name = Uuid::new_v4().to_string();
+    let consumer_tag = String::from("consumer_tag_") + &Uuid::new_v4().to_string();
+    let queue_name = String::from("consumer_queue_") +  &Uuid::new_v4().to_string();
 
     let mut queue = channel.queue_declare(
         &queue_name, 
