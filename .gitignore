@@ -432,3 +432,5 @@ Tours/back-office/target/
 Tours/admin-app/target/
 rr-pattern/res-app/target/
 rr-pattern/req-app/target/
+rust-lapin-producer/target/
+resequencing-example/producer/target/
