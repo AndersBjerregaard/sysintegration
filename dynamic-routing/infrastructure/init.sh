@@ -27,7 +27,7 @@ done
 
 # RabbitMQ management API is ready, execute your rabbitmqadmin commands
 echo "RabbitMQ management API is ready. Executing rabbitmqadmin commands..."
-# Your rabbitmqadmin commands go here
+rabbitmqadmin declare exchange name=my-new-exchange type=fanout
 
 echo "Setup complete."
 
