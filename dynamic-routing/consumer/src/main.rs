@@ -132,7 +132,7 @@ async fn declare_dr_exchange(channel: &MutexGuard<'_, Channel>) {
     let mut exchange = channel
         .exchange_declare(
             DR_EXCHANGE_NAME,
-            lapin::ExchangeKind::Direct,
+            lapin::ExchangeKind::Fanout,
             ExchangeDeclareOptions::default(),
             FieldTable::default(),
         )
