@@ -19,17 +19,9 @@ const DR_EXCHANGE_NAME: &str = "DR_Exchange";
 // A value that is is initialized on the first access
 static APP_UUID: LazyLock<Uuid> = LazyLock::new(|| Uuid::new_v4());
 
-struct QueueInfo {
-    default_prefix: String,
-}
+struct QueueInfo { }
 
 impl QueueInfo {
-    pub fn new(default_prefix: &str) -> Self {
-        QueueInfo {
-            default_prefix: default_prefix.to_string(),
-        }
-    }
-
     pub fn get_app_uuid() -> String {
         String::from("consumer_queue_") + &APP_UUID.to_string()
     }
@@ -139,8 +131,8 @@ async fn declare_dr_exchange(channel: &MutexGuard<'_, Channel>) {
         .await;
 
     while exchange.is_err() {
-        println!("--> Failed to declare exchange: {}", &exchange.unwrap_err());
-        println!("--> Attempting to re-declare exchange in 3 seconds...");
+        println!("--> Failed to declare dr_exchange: {}", &exchange.unwrap_err());
+        println!("--> Attempting to re-declare dr_exchange in 3 seconds...");
         std::thread::sleep(Duration::from_millis(3000));
         exchange = channel
             .exchange_declare(
