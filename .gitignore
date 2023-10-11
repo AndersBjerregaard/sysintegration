@@ -435,3 +435,4 @@ rr-pattern/req-app/target/
 rust-lapin-producer/target/
 dynamic-routing/producer/target/
 dynamic-routing/consumer/target/
+dynamic-routing/load-balancer/target/

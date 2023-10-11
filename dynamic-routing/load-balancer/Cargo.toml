@@ -1,5 +1,5 @@
 [package]
-name = "producer"
+name = "load_balancer"
 version = "0.1.0"
 edition = "2021"
 

@@ -610,6 +610,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef53942eb7bf7ff43a617b3e2c1c4a5ecf5944a7c1bc12d7ee39bbb15e5c1519"
 
 [[package]]
+name = "load_balancer"
+version = "0.1.0"
+dependencies = [
+ "lapin",
+ "tokio",
+ "tokio-executor-trait",
+ "tokio-reactor-trait",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -822,16 +832,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "134c189feb4956b20f6f547d2cf727d4c0fe06722b20a0eec87ed445a97f92da"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "producer"
-version = "0.1.0"
-dependencies = [
- "lapin",
- "tokio",
- "tokio-executor-trait",
- "tokio-reactor-trait",
 ]
 
 [[package]]
