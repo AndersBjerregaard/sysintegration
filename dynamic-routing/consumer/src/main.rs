@@ -157,7 +157,7 @@ async fn consume_messages(channel: &MutexGuard<'_, Channel>) -> Consumer {
         .await;
 
     while queue.is_err() {
-        println!("--> Failed to consume queue: {}", &queue.unwrap_err());
+        println!("--> Failed to declare queue: {}", &queue.unwrap_err());
         println!("--> Attempting to re-declare queue in 3 seconds...");
         std::thread::sleep(Duration::from_millis(3000));
         queue = channel
