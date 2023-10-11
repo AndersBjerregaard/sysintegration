@@ -1,13 +1,13 @@
-use std::{sync::Arc, time::Duration};
+use std::{cmp::Ordering, collections::VecDeque, sync::Arc, time::Duration};
 
 use lapin::{
     message::DeliveryResult,
     options::{
-        BasicAckOptions, BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions,
-        QueueDeclareOptions,
+        BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, ExchangeDeclareOptions,
+        QueueBindOptions, QueueDeclareOptions,
     },
     types::FieldTable,
-    Channel, Connection, ConnectionProperties,
+    BasicProperties, Channel, Connection, ConnectionProperties,
 };
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -21,13 +21,16 @@ async fn main() {
     let uri = "amqp://guest:guest@localhost:5673/%2F";
 
     let options = ConnectionProperties::default()
-        .with_connection_name("producer-connection".to_string().into())
+        .with_connection_name("load-balancer-connection".to_string().into())
         .with_executor(tokio_executor_trait::Tokio::current())
         .with_reactor(tokio_reactor_trait::Tokio);
 
     let connection = connect_rabbitmq(uri, options).await;
 
     let channel = Arc::new(Mutex::new(connection.create_channel().await.unwrap()));
+
+    // Mutex Arc combination (atomic reference counting) to safely share data between threads.
+    let consumers: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
 
     declare_producer_exchange(&channel.lock().await).await;
 
@@ -43,39 +46,66 @@ async fn main() {
 
     println!("--> Ready to receive messages on producer_queue...");
 
-    producer_consumer.set_delegate(move |delivery_result: DeliveryResult| async move {
-        let delivery = match delivery_result {
-            Ok(Some(delivery)) => delivery,
-            Ok(None) => return,
-            Err(error) => {
-                println!("--> Failed to consume message {}", error);
-                return;
+    producer_consumer.set_delegate(move |delivery_result: DeliveryResult| {
+        let producer_channel = Arc::clone(&channel);
+        let consumers_clone = Arc::clone(&consumers);
+        async move {
+            let delivery = match delivery_result {
+                Ok(Some(delivery)) => delivery,
+                Ok(None) => return,
+                Err(error) => {
+                    println!("--> Failed to consume message {}", error);
+                    return;
+                }
+            };
+
+            let byte_data = delivery.data.clone();
+            let string_result = match std::str::from_utf8(&byte_data) {
+                Ok(result) => result,
+                Err(_) => "<Invalid UTF8 Bytes>",
+            };
+
+            println!("--> Received message on producer_queue: {}", string_result);
+
+            let mut consumers = consumers_clone.lock().await;
+            if consumers.is_empty() {
+                println!("--> [Error]: Cannot forward message from producer to a consumer, since there are no known available consumers at the given moment.");
+            } else {
+                let channel = producer_channel.lock().await;
+                let confirm = channel
+                    .basic_publish(
+                        "", // Default exchange
+                        &consumers.pop_front().unwrap(), 
+                        BasicPublishOptions::default(), 
+                        string_result.as_bytes(), 
+                        BasicProperties::default()
+                    ).await;
+
+                if confirm.is_err() {
+                    println!(
+                        "--> [Error]: Could not forward message to consumer: {}",
+                        confirm.unwrap_err()
+                    );
+                } else {
+                    println!("--> Forwarded message to a 'ready consumer'!");
+                }
             }
-        };
 
-        let byte_data = delivery.data.clone();
-        let string_result = match std::str::from_utf8(&byte_data) {
-            Ok(result) => result,
-            Err(_) => "<Invalid UTF8 Bytes>",
-        };
+            println!("--> Acknowledging message from producer_queue...");
 
-        println!("--> Received message on producer_queue: {}", string_result);
+            delivery
+                .ack(BasicAckOptions::default())
+                .await
+                .expect("--> Failed to ack message");
 
-        println!("--> Acknowledging...");
-
-        delivery
-            .ack(BasicAckOptions::default())
-            .await
-            .expect("--> Failed to ack message");
-
-        println!("--> Ready to receive additional message on producer_queue...");
+            println!("--> Ready to receive additional message on producer_queue...");
+        }
     });
 
     println!("--> Ready to receive messages on dr_queue...");
 
     dr_consumer.set_delegate(move |delivery_result: DeliveryResult| {
-        let dr_channel = channel.clone();
-
+        let consumers_clone = Arc::clone(&consumers);
         async move {
             let delivery = match delivery_result {
                 Ok(Some(delivery)) => delivery,
@@ -93,6 +123,23 @@ async fn main() {
             };
 
             println!("--> Received message on dr_queue: {}", string_result);
+
+            // Lock mutex to access consumers
+            let mut consumers = consumers_clone.lock().await;
+
+            // Check if consumer already exists in-memory
+            let mut consumer_exists: bool = false;
+            for consumer in consumers.iter() {
+                if consumer.cmp(&string_result.to_string()) == Ordering::Equal {
+                    println!("--> [Warning]: Consumer already exists as a known ready consumer to the load balancer");
+                    consumer_exists = true;
+                    break;
+                }
+            }
+            if !consumer_exists {
+                println!("--> Adding consumer as a 'ready consumer' to route to...");
+                consumers.push_back(string_result.to_string());
+            }
 
             println!("--> Acknowledging...");
 

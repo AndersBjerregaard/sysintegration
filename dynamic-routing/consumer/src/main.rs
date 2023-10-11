@@ -36,7 +36,7 @@ async fn main() {
     let uri = "amqp://guest:guest@localhost:5673/%2F";
 
     let options = ConnectionProperties::default()
-        .with_connection_name("producer-connection".to_string().into())
+        .with_connection_name("consumer-connection".to_string().into())
         .with_executor(tokio_executor_trait::Tokio::current())
         .with_reactor(tokio_reactor_trait::Tokio);
 
