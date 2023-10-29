@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    container_name: rabbitmq
+    restart: on-failure
+    image: rabbitmq:3-management-alpine
+    ports:
+      - 15673:15672
