@@ -1,0 +1,3 @@
+consumer/target/
+producer/target/
+load-balancer/target/
