@@ -2,7 +2,7 @@
 
 docker compose down
 
-docker compose up -d
+docker compose --env-file ./.env up -d
 
 echo "Waiting for RabbitMQ management API to be ready..."
 

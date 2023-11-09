@@ -10,6 +10,8 @@ services:
 
   producer:
     build:
-      context:
-        - ./producer/
-# Write dockerfile here        
+      context: ./producer
+      dockerfile: Dockerfile
+    environment:
+      RABBITMQ_URI: ${RABBITMQ_URI}
+      PROD_EXCH_NAME: ${PROD_EXCH_NAME}
