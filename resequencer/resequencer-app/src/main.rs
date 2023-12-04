@@ -8,7 +8,7 @@ use lapin::{
 };
 use tokio::sync::Mutex;
 
-const QUEUE_NAME: &str = "q_aggregator";
+const QUEUE_NAME: &str = "q_resequencer";
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +19,7 @@ async fn main() {
     let uri = "amqp://guest:guest@localhost:5673/%2F";
 
     let options = ConnectionProperties::default()
-        .with_connection_name("aggregator_connection".to_string().into())
+        .with_connection_name("resequencer_connection".to_string().into())
         .with_executor(tokio_executor_trait::Tokio::current())
         .with_reactor(tokio_reactor_trait::Tokio);
 
@@ -70,16 +70,44 @@ async fn main() {
                         return;
                     }
                 };
+
                 let data_bytes = delivery.data.clone();
                 let data_string = match std::str::from_utf8(&data_bytes) {
                     Ok(result) => result,
                     Err(_) => "<Invalid UTF8 Bytes>",
                 };
+
                 println!(
                     "[Information] Received message on '{}', with the body: '{}'",
                     QUEUE_NAME, data_string
                 );
                 println!("  Delivery tag: '{}'", delivery.delivery_tag);
+                let headers = delivery.properties.headers().clone().unwrap();
+
+                // Access the inner BTreeMap to perform lookups
+                let amqp_value = headers.inner().get("messageId").unwrap();
+                let supported_type = match amqp_value.get_type() {
+                    AMQPType::LongString => true,
+                    _ => {
+                        println!("[Error] Unsupported header value type");
+                        false
+                    }
+                };
+                if !supported_type {
+                    delivery
+                        .nack(BasicNackOptions::default())
+                        .await
+                        .expect_err("[Error] Failed to reject message");
+                    println!("[Information] Message rejected...");
+                    return;
+                }
+                let binding = amqp_value.as_long_string().unwrap().clone();
+                let header_value_bytes = binding.as_bytes();
+                let header_value_string = std::str::from_utf8(header_value_bytes).unwrap();
+                println!(
+                    "  Header value of key 'messageId': '{}'",
+                    header_value_string
+                );
                 // Locks this mutex, causing the current task to yield until the lock has been acquired.
                 let mut messages = consumed_messages.lock().await;
                 messages.push(data_string.to_string());
@@ -93,6 +121,7 @@ async fn main() {
                     );
                 }
                 drop(messages); // Drop the reference, releasing this task's lock
+
                 delivery
                     .ack(BasicAckOptions::default())
                     .await
