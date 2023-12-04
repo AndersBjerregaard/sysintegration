@@ -1,20 +1,80 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use lapin::{
     message::DeliveryResult,
-    options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions, QueueDeclareOptions},
-    types::{AMQPType, FieldTable},
+    options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions},
+    types::FieldTable,
     Connection, ConnectionProperties,
 };
 use tokio::sync::Mutex;
 
 const QUEUE_NAME: &str = "q_resequencer";
 
+#[derive(Debug)]
+struct Sequence {
+    payload: String,
+    num_sequences: u64,
+    sequence: u64,
+    sequence_id: String,
+}
+
+impl Sequence {
+    /// Creates a new [`Sequence`].
+    fn new(payload: String, num_sequences: u64, sequence: u64, sequence_id: String) -> Self {
+        Self {
+            payload,
+            num_sequences,
+            sequence,
+            sequence_id,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Resequencer {
+    sequences: HashMap<String, Vec<Option<String>>>,
+}
+
+impl Resequencer {
+    fn new() -> Resequencer {
+        Resequencer {
+            sequences: HashMap::new(),
+        }
+    }
+
+    fn push_sequence(&mut self, new_sequence: Sequence) {
+        let sequence_id = &new_sequence.sequence_id;
+
+        // If sequence_id exists, update or insert payload at the appropriate sequence number
+        let sequence_list = self
+            .sequences
+            .entry(new_sequence.sequence_id.clone())
+            .or_insert_with(|| vec![None; new_sequence.num_sequences as usize]);
+
+        sequence_list[new_sequence.sequence as usize - 1] = Some(new_sequence.payload.clone());
+
+        // Check if all sequences have been received for this sequence_id
+        if sequence_list.iter().all(|s| s.is_some()) {
+            let resequenced_payload: String = sequence_list
+                .iter()
+                .flatten()
+                .map(|s| s.to_owned())
+                .collect();
+
+            println!("[Information] Received all sequences for sequence_id: {}", sequence_id);
+            println!("[Information] Resequenced payload: {}", resequenced_payload);
+
+            // Optionally, you can clear the sequences for this sequence_id after resequencing
+            self.sequences.remove(sequence_id);
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // An atomic reference counter to an asynchronous mutual exclusion wrapper.
     // For the sake of being able to have multiple threads safely access and mutate the wrapped data.
-    let consumed_messages = Arc::new(Mutex::new(Vec::<String>::new()));
+    let consumed_messages = Arc::new(Mutex::new(Resequencer::new()));
 
     let uri = "amqp://guest:guest@localhost:5673/%2F";
 
@@ -81,45 +141,57 @@ async fn main() {
                     "[Information] Received message on '{}', with the body: '{}'",
                     QUEUE_NAME, data_string
                 );
+
                 println!("  Delivery tag: '{}'", delivery.delivery_tag);
+
+                // Access the headers
                 let headers = delivery.properties.headers().clone().unwrap();
 
                 // Access the inner BTreeMap to perform lookups
-                let amqp_value = headers.inner().get("messageId").unwrap();
-                let supported_type = match amqp_value.get_type() {
-                    AMQPType::LongString => true,
-                    _ => {
-                        println!("[Error] Unsupported header value type");
-                        false
-                    }
-                };
-                if !supported_type {
-                    delivery
-                        .nack(BasicNackOptions::default())
-                        .await
-                        .expect_err("[Error] Failed to reject message");
-                    println!("[Information] Message rejected...");
-                    return;
-                }
-                let binding = amqp_value.as_long_string().unwrap().clone();
-                let header_value_bytes = binding.as_bytes();
-                let header_value_string = std::str::from_utf8(header_value_bytes).unwrap();
-                println!(
-                    "  Header value of key 'messageId': '{}'",
-                    header_value_string
+                let b_tree_map = headers.inner();
+
+                // Assume that the type is 'LongString' and reference the value thereafter.
+                let binding = b_tree_map
+                    .get("sequence_id")
+                    .unwrap()
+                    .as_long_string()
+                    .unwrap();
+                let sequence_id_bytes = binding.as_bytes();
+                let sequence_id = std::str::from_utf8(sequence_id_bytes).unwrap();
+
+                println!("  sequence_id: '{}'", &sequence_id);
+
+                // Numbers from RabbitMQ message headers default to the AMQValue of 'LongLongInt', unless there's a decimal point, then it defaults to 'Double'
+                let sequence = b_tree_map
+                    .get("sequence")
+                    .unwrap()
+                    .as_long_long_int()
+                    .unwrap();
+
+                println!("  sequence: '{}'", &sequence);
+
+                let num_sequences = b_tree_map
+                    .get("num_sequences")
+                    .unwrap()
+                    .as_long_long_int()
+                    .unwrap();
+
+                println!("  num_sequences: '{}'", &num_sequences);
+
+                let new_sequence = Sequence::new(
+                    String::from(data_string),
+                    num_sequences.try_into().unwrap(),
+                    sequence.try_into().unwrap(),
+                    String::from(sequence_id),
                 );
+
                 // Locks this mutex, causing the current task to yield until the lock has been acquired.
                 let mut messages = consumed_messages.lock().await;
-                messages.push(data_string.to_string());
-                // Hardcoded example of aggregating the values of two messages together, regardless of order
-                if messages.len() == 2 {
-                    let last = messages.pop().unwrap();
-                    let first = messages.pop().unwrap();
-                    println!(
-                        "[Information] The last two messages' payloads aggregated: '{}{}'",
-                        first, last
-                    );
-                }
+
+                messages.push_sequence(new_sequence);
+
+                // Check if all sequences for a specific id has been consumed
+
                 drop(messages); // Drop the reference, releasing this task's lock
 
                 delivery
